@@ -10,16 +10,19 @@
 
 using WeightMap = std::map<std::string, torch::Tensor>;
 
-WeightMap load_weights_from_scratch(const std::string& path) {
+WeightMap load_weights_from_scratch(const std::string& path)
+{
     std::cout << "Loading weights from robust binary file: " << path << std::endl;
     std::ifstream file(path, std::ios::binary);
-    if (!file.is_open()) {
+    if (!file.is_open())
+    {
         throw std::runtime_error("Could not open weights file: " + path);
     }
 
     WeightMap weight_map;
 
-    while (file.peek() != EOF) {
+    while (file.peek() != EOF)
+    {
         uint32_t name_len;
         file.read(reinterpret_cast<char*>(&name_len), sizeof(name_len));
         std::string name(name_len, '\0');
@@ -29,21 +32,24 @@ WeightMap load_weights_from_scratch(const std::string& path) {
         uint64_t num_elements;
         file.read(reinterpret_cast<char*>(&num_elements), sizeof(num_elements));
         torch::Tensor tensor;
-        switch (type_code) {
-            case 0: {
+        switch (type_code)
+        {
+        case 0:
+            {
                 std::vector<float> data(num_elements);
                 file.read(reinterpret_cast<char*>(data.data()), num_elements * sizeof(float));
                 tensor = torch::from_blob(data.data(), {static_cast<long>(num_elements)}, torch::kFloat32).clone();
                 break;
             }
-            case 1: {
+        case 1:
+            {
                 std::vector<int64_t> data(num_elements);
                 file.read(reinterpret_cast<char*>(data.data()), num_elements * sizeof(int64_t));
                 tensor = torch::from_blob(data.data(), {static_cast<long>(num_elements)}, torch::kInt64).clone();
                 break;
             }
-            default:
-                throw std::runtime_error("Unknown data type code in weights file: " + std::to_string(type_code));
+        default:
+            throw std::runtime_error("Unknown data type code in weights file: " + std::to_string(type_code));
         }
         weight_map[name] = tensor;
     }
@@ -52,7 +58,8 @@ WeightMap load_weights_from_scratch(const std::string& path) {
 }
 
 
-int main() {
+int main()
+{
     const int NUM_CLASSES = 101;
     const int NUM_EPOCHS = 3;
     const int BATCH_SIZE = 64;
@@ -64,60 +71,70 @@ int main() {
 
     const std::string WEIGHTS_PATH = "../vgg16_weights.bin";
 
-    try {
+    try
+    {
         WeightMap loaded_weights = load_weights_from_scratch(WEIGHTS_PATH);
 
         torch::NoGradGuard no_grad;
         int copied_params = 0;
         int skipped_params = 0;
 
-        for (auto& pair : model->named_parameters()) {
+        for (auto& pair : model->named_parameters())
+        {
             const std::string& name = pair.key();
             torch::Tensor& param = pair.value();
 
-            if (loaded_weights.count(name)) {
+            if (loaded_weights.count(name))
+            {
                 const torch::Tensor& loaded_tensor = loaded_weights.at(name);
 
                 // ================== THE CRITICAL FIX IS HERE ==================
                 // ONLY copy the weights if the number of elements is the same.
-                if (param.numel() == loaded_tensor.numel()) {
+                if (param.numel() == loaded_tensor.numel())
+                {
                     param.copy_(loaded_tensor.reshape(param.sizes()));
                     copied_params++;
-                } else {
+                }
+                else
+                {
                     // This will happen for the final classifier layer, which is EXPECTED.
                     std::cout << "Skipping parameter '" << name << "' due to shape mismatch." << std::endl;
                     skipped_params++;
                 }
                 // =============================================================
-
             }
         }
-        for (auto& pair : model->named_buffers()) {
+        for (auto& pair : model->named_buffers())
+        {
             const std::string& name = pair.key();
             torch::Tensor& buffer = pair.value();
-            if (loaded_weights.count(name)) {
-                 // Buffers should always match in size.
+            if (loaded_weights.count(name))
+            {
+                // Buffers should always match in size.
                 buffer.copy_(loaded_weights.at(name).reshape(buffer.sizes()));
             }
         }
-        std::cout << "Manually copied " << copied_params << " parameters and skipped " << skipped_params << "." << std::endl;
-
-    } catch (const std::exception& e) {
+        std::cout << "Manually copied " << copied_params << " parameters and skipped " << skipped_params << "." <<
+            std::endl;
+    }
+    catch (const std::exception& e)
+    {
         std::cerr << "An error occurred: " << e.what() << std::endl;
         return 1;
     }
 
     // --- The rest of the code is unchanged and correct ---
-    for (auto& param : model->features->parameters()) {
+    for (auto& param : model->features->parameters())
+    {
         param.set_requires_grad(false);
     }
 
     std::vector<torch::Tensor> params_to_update;
-    for (auto& param : model->classifier->parameters()) {
+    for (auto& param : model->classifier->parameters())
+    {
         params_to_update.push_back(param);
     }
     torch::optim::Adam optimizer(params_to_update, torch::optim::AdamOptions(0.001));
-
 
 
     // auto train_dataset = Food101Dataset("../food-101", "train").map(torch::data::transforms::Stack<>());
@@ -131,17 +148,20 @@ int main() {
         std::make_shared<xt::transforms::general::Normalize>(std::vector<float>{0.5, 0.5, 0.5},
                                                              std::vector<float>{0.5, 0.5, 0.5}));
     auto compose = std::make_unique<xt::transforms::Compose>(transform_list);
-    auto dataset = xt::datasets::Food101("/home/kami/Documents/datasets/", xt::datasets::DataMode::TRAIN, false,true,
+    auto dataset = xt::datasets::Food101("/home/kami/Documents/datasets/", xt::datasets::DataMode::TRAIN, false, true,
                                          std::move(compose));
     xt::dataloaders::ExtendedDataLoader data_loader(dataset, BATCH_SIZE, true, 32, 20);
 
 
-
     std::cout << "\nStarting C++ fine-tuning from scratch..." << std::endl;
-    for (int epoch = 0; epoch < 3; ++epoch) {
+    auto start_time = std::chrono::high_resolution_clock::now();
+    for (int epoch = 0; epoch < 3; ++epoch)
+    {
         model->train();
         double running_loss = 0.0;
-        for (auto& batch : data_loader) {
+        int batch_idx = 0;
+        for (auto& batch : data_loader)
+        {
             auto inputs = batch.first.to(device);
             auto labels = batch.second.to(device);
             optimizer.zero_grad();
@@ -150,12 +170,20 @@ int main() {
             loss.backward();
             optimizer.step();
             running_loss += loss.item().toDouble() * inputs.size(0);
+            if (++batch_idx % 100 == 0)
+            {
+                std::cout << "  Epoch [" << epoch + 1 << "/" << NUM_EPOCHS
+                    << "], Loss: " << loss.item<double>() << std::endl;
+            }
         }
         // std::cout << "Epoch " << epoch + 1 << " Loss: " << running_loss / train_dataset.size().value() << std::endl;
     }
 
+    auto end_time = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed = end_time - start_time;
+    std::cout << "\nC++ fine-tuning finished in " << elapsed.count() << " seconds." << std::endl;
     std::cout << "\nFine-tuning complete." << std::endl;
-    torch::save(model, "food101_vgg16_finetuned_model.pt");
+    // torch::save(model, "food101_vgg16_finetuned_model.pt");
 
     return 0;
 }
