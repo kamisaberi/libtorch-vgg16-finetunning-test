@@ -7,6 +7,8 @@ set(CMAKE_CUDA_HOST_COMPILER "g++-12")
 set(CMAKE_CUDA_ARCHITECTURES "75;86")
 set(CMAKE_CUDA_COMPILER /usr/local/cuda-12.8/bin/nvcc)
 
+#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_GLIBCXX_USE_CXX11_ABI=0")
+
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build." FORCE)
     message(STATUS "Setting default build type to: ${CMAKE_BUILD_TYPE}")
@@ -45,7 +47,7 @@ set(TEST_LIBRARIES ${CURL_LIBRARIES}
 
 )
 
-add_executable(main main.cpp)
+add_executable(main main2.cpp)
 target_link_libraries(main "${TORCH_LIBRARIES}")
 set_property(TARGET main PROPERTY CXX_STANDARD 17)
 target_include_directories(main PRIVATE ${LIBTAR_INCLUDE_DIR} ${TORCH_INCLUDE_DIRS} ${LibArchive_INCLUDE_DIRS} ${XTORCH_INCLUDE_DIRS})
