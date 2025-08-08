@@ -1,6 +1,7 @@
 #include "vgg_model.h"
-#include "Food101Dataset.h"
+// #include "Food101Dataset.h"
 #include <torch/torch.h>
+#include <xtorch/xtorch.h>
 #include <iostream>
 #include <fstream>
 #include <vector>
@@ -37,6 +38,11 @@ WeightMap load_weights_from_scratch(const std::string& path) {
 
 
 int main() {
+    const int NUM_CLASSES = 101;
+    const int NUM_EPOCHS = 3;
+    const int BATCH_SIZE = 64;
+    const double LEARNING_RATE = 0.001;
+
     torch::Device device(torch::kCUDA);
     Food101VGG16 model(101);
     model->to(device);
@@ -84,27 +90,47 @@ int main() {
     torch::optim::Adam optimizer(params_to_update, torch::optim::AdamOptions(0.001));
 
     // --- 5. Data Loader ---
-    auto train_dataset = Food101Dataset("../food-101", "train").map(torch::data::transforms::Stack<>());
-    auto data_loader_options = torch::data::DataLoaderOptions().batch_size(64).workers(8);
-    auto train_loader = torch::data::make_data_loader<torch::data::samplers::RandomSampler>(
-        std::move(train_dataset), data_loader_options);
+
+
+    // auto train_dataset = Food101Dataset("../food-101", "train").map(torch::data::transforms::Stack<>());
+    // auto data_loader_options = torch::data::DataLoaderOptions().batch_size(64).workers(8);
+    // auto train_loader = torch::data::make_data_loader<torch::data::samplers::RandomSampler>(
+    //     std::move(train_dataset), data_loader_options);
+
+    std::vector<std::shared_ptr<xt::Module>> transform_list;
+    transform_list.push_back(std::make_shared<xt::transforms::image::Resize>(std::vector<int64_t>{224, 224}));
+    transform_list.push_back(
+        std::make_shared<xt::transforms::general::Normalize>(std::vector<float>{0.5, 0.5, 0.5},
+                                                             std::vector<float>{0.5, 0.5, 0.5}));
+    auto compose = std::make_unique<xt::transforms::Compose>(transform_list);
+    auto dataset = xt::datasets::Food101("/home/kami/Documents/datasets/", xt::datasets::DataMode::TRAIN, false,true,
+                                         std::move(compose));
+    xt::dataloaders::ExtendedDataLoader data_loader(dataset, BATCH_SIZE, true, 32, 20);
+
+
 
     // --- 6. Fine-Tuning Loop ---
     std::cout << "\nStarting C++ fine-tuning from scratch..." << std::endl;
-    for (int epoch = 0; epoch < 3; ++epoch) {
+    for (int epoch = 0; epoch < NUM_EPOCHS; ++epoch) {
+        int64_t batch_idx = 0;
         model->train();
         double running_loss = 0.0;
-        for (auto& batch : *train_loader) {
-            auto inputs = batch.data.to(device);
-            auto labels = batch.target.to(device);
+        for (auto& batch : data_loader) {
+            auto inputs = batch.first.to(device);
+            auto labels = batch.second.to(device);
             optimizer.zero_grad();
             auto outputs = model->forward(inputs);
             auto loss = torch::cross_entropy_loss(outputs, labels);
             loss.backward();
             optimizer.step();
             running_loss += loss.item().toDouble() * inputs.size(0);
+            if (++batch_idx % 100 == 0) {
+                std::cout << "  Epoch [" << epoch + 1 << "/" << NUM_EPOCHS
+                         << "], Loss: " << loss.item<double>() << std::endl;
+            }
+
         }
-        std::cout << "Epoch " << epoch + 1 << " Loss: " << running_loss / train_dataset.size().value() << std::endl;
+        // std::cout << "Epoch " << epoch + 1 << " Loss: " << running_loss / train_dataset.size().value() << std::endl;
     }
 
     std::cout << "\nFine-tuning complete." << std::endl;
