@@ -14,7 +14,7 @@ weights = model.state_dict()
 # for key in weights.keys():
 #     print(key)
 
-output_path = "vgg16_bn_weights.pt"
+output_path = "../vgg16_bn_weights.pt"
 torch.save(weights, output_path)
 
 print(f"VGG16_BN state_dict saved to {output_path}")

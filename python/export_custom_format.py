@@ -6,7 +6,7 @@ print("Loading pre-trained VGG16_BN model...")
 model = models.vgg16_bn(pretrained=True)
 weights_dict = model.state_dict()
 
-output_filename = "vgg16_weights.bin"
+output_filename = "../vgg16_weights.bin"
 print(f"Saving weights to ROBUST binary format: {output_filename}")
 
 # Define codes for our data types
