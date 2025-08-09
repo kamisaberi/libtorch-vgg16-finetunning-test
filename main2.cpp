@@ -150,7 +150,7 @@ int main()
     auto compose = std::make_unique<xt::transforms::Compose>(transform_list);
     auto dataset = xt::datasets::Food101("/home/kami/Documents/datasets/", xt::datasets::DataMode::TRAIN, false, true,
                                          std::move(compose));
-    xt::dataloaders::ExtendedDataLoader data_loader(dataset, BATCH_SIZE, true, 32, 20);
+    xt::dataloaders::ExtendedDataLoader data_loader(dataset, BATCH_SIZE, false, 32, 20);
 
 
     std::cout << "\nStarting C++ fine-tuning from scratch..." << std::endl;
@@ -165,7 +165,7 @@ int main()
             auto inputs = batch.first.to(device);
             auto labels = batch.second.to(device);
             optimizer.zero_grad();
-            auto outputs = model->forward(inputs);
+            auto outputs = model->forward(inputs, true, batch_idx);
             auto loss = torch::cross_entropy_loss(outputs, labels);
             loss.backward();
             optimizer.step();
