@@ -2,3 +2,5 @@ build
 cmake-build-debug
 vgg16_bn_weights.pt
 vgg16_weights.bin
+python/unet_traced.pt
+python/unet.onnx
